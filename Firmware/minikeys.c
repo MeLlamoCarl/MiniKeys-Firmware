@@ -255,6 +255,35 @@ void releaseAll(void) {
 // ===================================================================================
 
 __idata uint16_t frame = 0;                 // 20 ms frames
+__idata uint16_t breathePhase = 0;
+__idata uint16_t rainbowPhase = 0;
+
+// WS2812 LEDs respond linearly while the eye doesn't: without this curve (gamma 2.6) mixed colors
+// wash out and half brightness looks like full brightness.
+__code uint8_t gamma8[256] = {
+    0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+    1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+    1,   1,   1,   1,   2,   2,   2,   2,   2,   2,   2,   2,   3,   3,   3,   3,
+    3,   3,   4,   4,   4,   4,   5,   5,   5,   5,   5,   6,   6,   6,   6,   7,
+    7,   7,   8,   8,   8,   9,   9,   9,  10,  10,  10,  11,  11,  11,  12,  12,
+   13,  13,  13,  14,  14,  15,  15,  16,  16,  17,  17,  18,  18,  19,  19,  20,
+   20,  21,  21,  22,  22,  23,  24,  24,  25,  25,  26,  27,  27,  28,  29,  29,
+   30,  31,  31,  32,  33,  34,  34,  35,  36,  37,  38,  38,  39,  40,  41,  42,
+   42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,
+   58,  59,  60,  61,  62,  63,  64,  65,  66,  68,  69,  70,  71,  72,  73,  75,
+   76,  77,  78,  80,  81,  82,  84,  85,  86,  88,  89,  90,  92,  93,  94,  96,
+   97,  99, 100, 102, 103, 105, 106, 108, 109, 111, 112, 114, 115, 117, 119, 120,
+  122, 124, 125, 127, 129, 130, 132, 134, 136, 137, 139, 141, 143, 145, 146, 148,
+  150, 152, 154, 156, 158, 160, 162, 164, 166, 168, 170, 172, 174, 176, 178, 180,
+  182, 184, 186, 188, 191, 193, 195, 197, 199, 202, 204, 206, 209, 211, 213, 215,
+  218, 220, 223, 225, 227, 230, 232, 235, 237, 240, 242, 245, 247, 250, 252, 255
+};
+
+// Per speed 1...10: breathing 6 s to 1.2 s per breath, rainbow 20 s to 2 s per turn (16-bit phase
+// steps per 20 ms frame), wave 400 ms to 100 ms per key (frames).
+__code uint16_t breatheStep[10] = {218, 240, 266, 298, 339, 393, 468, 578, 756, 1092};
+__code uint16_t rainbowStep[10] = {66, 73, 82, 94, 109, 131, 164, 218, 328, 655};
+__code uint8_t  waveFrames[10]  = {20, 18, 17, 15, 13, 12, 10, 8, 7, 5};
 __xdata uint8_t pixels[NEO_COUNT][3];
 __xdata uint8_t pressLevel[NEO_COUNT];
 __xdata uint8_t pressColor[NEO_COUNT][3];
@@ -315,17 +344,20 @@ void renderLights(void) {
       break;
 
     case FX_BREATHE:
-      phase = frame * light.speed;
+      breathePhase += breatheStep[light.speed - 1];
+      phase = breathePhase >> 8;
       level = phase < 128 ? phase * 2 : (255 - phase) * 2;
+      if(level < 12) level = 12;            // never quite off
       for(i=0; i<NEO_COUNT; i++) setPixelScaled(i, color, level);
       break;
 
     case FX_RAINBOW:
-      for(i=0; i<NEO_COUNT; i++) setPixelHue(i, frame * light.speed + i * 40);
+      rainbowPhase += rainbowStep[light.speed - 1];
+      for(i=0; i<NEO_COUNT; i++) setPixelHue(i, (rainbowPhase >> 8) + i * 64);
       break;
 
     case FX_WAVE:
-      step = 16 - light.speed;              // frames per key
+      step = waveFrames[light.speed - 1];   // frames per key
       cycle = frame / step / 6;             // 3 keys lit, then 3 steps dark
       phase = (frame / step) % 6;
       if(phase < 3) {
@@ -372,9 +404,9 @@ void renderLights(void) {
 
   EA = 0;
   for(i=0; i<NEO_COUNT; i++) {
-    NEO_writeColor(((uint16_t)pixels[i][0] * light.brightness) >> 8,
-                   ((uint16_t)pixels[i][1] * light.brightness) >> 8,
-                   ((uint16_t)pixels[i][2] * light.brightness) >> 8);
+    NEO_writeColor(gamma8[((uint16_t)pixels[i][0] * light.brightness) >> 8],
+                   gamma8[((uint16_t)pixels[i][1] * light.brightness) >> 8],
+                   gamma8[((uint16_t)pixels[i][2] * light.brightness) >> 8]);
   }
   EA = 1;
 }

@@ -21,7 +21,7 @@
 // MiniKeys; bcdDevice and the product string tell MiniKeys this firmware is installed.
 #define USB_VENDOR_ID       0x1189
 #define USB_PRODUCT_ID      0x8890
-#define USB_DEVICE_VERSION  0x2001      // 0x20xx = MiniKeys firmware, xx = version
+#define USB_DEVICE_VERSION  0x2002      // 0x20xx = MiniKeys firmware, xx = version
 
 #define USB_MAX_POWER_mA    100
 
