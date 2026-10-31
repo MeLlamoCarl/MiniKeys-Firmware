@@ -76,13 +76,24 @@ make -C Firmware DIAG=1 bin # pin finder: each pin pulled low types its name
 
 The commands the firmware understands are in [Firmware/README.md](Firmware/README.md).
 
-## Credits and licenses
+## Credits
 
-- Pin mapping and the idea: biemster's [RGB Macropad Custom Firmware](https://hackaday.io/project/189914).
-- `Firmware/src` builds on Stefan Wagner's [CH55x libraries](https://github.com/wagiminator); the firmware
-  is licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). `ch554.h` is WCH's
-  register header.
-- The flasher's bootloader protocol follows the documentation of [wchisp](https://github.com/ch32-rs/wchisp).
+- biemster's [RGB Macropad Custom Firmware](https://hackaday.io/project/189914) — the idea and the pin
+  mapping of this keypad.
+- Stefan Wagner's [CH55x libraries](https://github.com/wagiminator) (CC BY-SA 3.0) — the firmware's
+  USB stack, NeoPixel driver, data flash and GPIO helpers, adapted in `Firmware/src`.
+- WCH's `ch554.h` register header.
+- [wchisp](https://github.com/ch32-rs/wchisp) (GPL-2.0) — documentation of the WCH bootloader protocol,
+  which the flasher implements independently (no code copied).
+- [ch57x-keyboard-tool](https://github.com/kriomant/ch57x-keyboard-tool) by kriomant (MIT) — reference
+  for the stock firmware's commands.
+- Gamma correction values follow Adafruit's NeoPixel guidance.
+
+## License
+
+- `flasher/`, the documentation and the photos: [MIT](LICENSE).
+- `Firmware/` and the prebuilt image: [CC BY-SA 3.0](Firmware/LICENSE), because the firmware builds on
+  CC BY-SA libraries.
 
 ---
 

@@ -1,0 +1,14 @@
+The MiniKeys firmware (this folder and the prebuilt release/minikeys.bin) is licensed under the
+Creative Commons Attribution-ShareAlike 3.0 Unported license (CC BY-SA 3.0):
+https://creativecommons.org/licenses/by-sa/3.0/
+
+It builds on, and includes adaptations of, the CH55x libraries by Stefan Wagner
+(https://github.com/wagiminator), which are licensed under CC BY-SA 3.0: the USB stack, the
+NeoPixel driver, the data flash, GPIO, system and delay helpers, the makefile and the USB
+descriptor and HID layout in src/. The ShareAlike terms of that license apply to this firmware
+as a whole.
+
+src/ch554.h is the CH554/CH552 register header by WCH (Nanjing Qinheng Microelectronics),
+Copyright (C) W.ch 1999-2014.
+
+Copyright (c) 2026 MeLlamoCarl for the MiniKeys additions.

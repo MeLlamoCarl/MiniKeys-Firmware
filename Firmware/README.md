@@ -49,7 +49,5 @@ screen show the same frame.
 ## Credits and license
 
 Pin mapping from biemster's [RGB Macropad Custom Firmware](https://hackaday.io/project/189914).
-The CH55x libraries in `src/` (USB stack, NeoPixel, data flash, GPIO, delays) come from Stefan
-Wagner's [CH552 projects](https://github.com/wagiminator) and, with the files derived from them, are
-licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). `ch554.h` is WCH's
-register header.
+The CH55x libraries in `src/` come from Stefan Wagner's [CH552 projects](https://github.com/wagiminator).
+The firmware is licensed under [CC BY-SA 3.0](LICENSE); `ch554.h` is WCH's register header.
