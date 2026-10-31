@@ -25,6 +25,31 @@ void USB_ISR(void) __interrupt(INT_NO_USB) {
   USB_interrupt();
 }
 
+// Millisecond clock from timer 2, so effects keep time however long the main loop takes.
+volatile __idata uint32_t msTicks = 0;
+
+void TMR2_ISR(void) __interrupt(INT_NO_TMR2) {
+  TF2 = 0;
+  msTicks++;
+}
+
+uint32_t millis(void) {
+  uint32_t now;
+  ET2 = 0;
+  now = msTicks;
+  ET2 = 1;
+  return now;
+}
+
+void TIMER_init(void) {
+  T2MOD = T2MOD & ~bTMR_CLK | bT2_CLK;      // timer 2 at Fsys/4
+  RCAP2 = 65536 - F_CPU / 4 / 1000;         // overflow every millisecond
+  T2COUNT = RCAP2;
+  T2CON = 0;                                // timer with auto reload
+  ET2 = 1;
+  TR2 = 1;
+}
+
 #pragma disable_warning 110                 // conditional flow changed by optimizer
 
 // ===================================================================================
@@ -254,9 +279,11 @@ void releaseAll(void) {
 // Lights
 // ===================================================================================
 
-__idata uint16_t frame = 0;                 // 20 ms frames
-__idata uint16_t breathePhase = 0;
-__idata uint16_t rainbowPhase = 0;
+// Effects are computed from the time since `effectStart`, which resets whenever MiniKeys sends
+// light settings (B1) or asks to sync (B4); MiniKeys' preview uses the same formulas from the same
+// moment, so both show the same frame.
+__idata uint32_t effectStart = 0;
+__idata uint32_t effectTime = 0;            // ms since effectStart, for this frame
 
 // WS2812 LEDs respond linearly while the eye doesn't: without this curve (gamma 2.6) mixed colors
 // wash out and half brightness looks like full brightness.
@@ -279,11 +306,15 @@ __code uint8_t gamma8[256] = {
   218, 220, 223, 225, 227, 230, 232, 235, 237, 240, 242, 245, 247, 250, 252, 255
 };
 
-// Per speed 1...10: breathing 6 s to 1.2 s per breath, rainbow 20 s to 2 s per turn (16-bit phase
-// steps per 20 ms frame), wave 400 ms to 100 ms per key (frames).
-__code uint16_t breatheStep[10] = {218, 240, 266, 298, 339, 393, 468, 578, 756, 1092};
-__code uint16_t rainbowStep[10] = {66, 73, 82, 94, 109, 131, 164, 218, 328, 655};
-__code uint8_t  waveFrames[10]  = {20, 18, 17, 15, 13, 12, 10, 8, 7, 5};
+// Per speed 1...10 (ms): breath length, rainbow turn, wave time per key.
+__code uint16_t breathePeriod[10] = {6000, 5467, 4933, 4400, 3867, 3333, 2800, 2267, 1733, 1200};
+__code uint16_t rainbowPeriod[10] = {20000, 18000, 16000, 14000, 12000, 10000, 8000, 6000, 4000, 2000};
+__code uint16_t waveStep[10] = {400, 360, 340, 300, 260, 240, 200, 160, 140, 100};
+
+// Position in a repeating period, scaled to 0...255.
+uint8_t periodPhase(uint16_t period) {
+  return (uint8_t)((effectTime % period) * 256 / period);
+}
 __xdata uint8_t pixels[NEO_COUNT][3];
 __xdata uint8_t pressLevel[NEO_COUNT];
 __xdata uint8_t pressColor[NEO_COUNT][3];
@@ -333,7 +364,8 @@ void flashPress(uint8_t key) {
 }
 
 void renderLights(void) {
-  uint8_t i, level, step, phase, cycle;
+  uint8_t i, level, phase, cycle;
+  uint32_t position;
   __xdata uint8_t* color = lightColor();
 
   for(i=0; i<NEO_COUNT; i++) setPixel(i, 0, 0, 0);
@@ -344,25 +376,24 @@ void renderLights(void) {
       break;
 
     case FX_BREATHE:
-      breathePhase += breatheStep[light.speed - 1];
-      phase = breathePhase >> 8;
+      phase = periodPhase(breathePeriod[light.speed - 1]);
       level = phase < 128 ? phase * 2 : (255 - phase) * 2;
       if(level < 12) level = 12;            // never quite off
       for(i=0; i<NEO_COUNT; i++) setPixelScaled(i, color, level);
       break;
 
     case FX_RAINBOW:
-      rainbowPhase += rainbowStep[light.speed - 1];
-      for(i=0; i<NEO_COUNT; i++) setPixelHue(i, (rainbowPhase >> 8) + i * 64);
+      phase = periodPhase(rainbowPeriod[light.speed - 1]);
+      for(i=0; i<NEO_COUNT; i++) setPixelHue(i, phase + i * 64);
       break;
 
     case FX_WAVE:
-      step = waveFrames[light.speed - 1];   // frames per key
-      cycle = frame / step / 6;             // 3 keys lit, then 3 steps dark
-      phase = (frame / step) % 6;
+      position = effectTime / waveStep[light.speed - 1];
+      cycle = (position / 6) % 3;           // 3 keys lit, then 3 steps dark, next color
+      phase = position % 6;
       if(phase < 3) {
         if(light.flags & FLAG_MULTICOLOR) {
-          for(i=0; i<3; i++) tmpColor[i] = palette[cycle % 3][i];
+          for(i=0; i<3; i++) tmpColor[i] = palette[cycle][i];
         }
         setPixelScaled(keyPixel[phase], tmpColor, 255);
       }
@@ -463,6 +494,11 @@ void handleCommand(void) {
       if(cmd[5] >= 1 && cmd[5] <= 10) light.speed = cmd[5];
       light.brightness = cmd[6];
       light.flags = cmd[7];
+      effectStart = millis();
+      return;
+
+    case 0xB4:                                    // B4: restart effects now (sync with the app)
+      effectStart = millis();
       return;
 
     case 0xB2:                                    // B2 key r g b: live color (key 0 = all)
@@ -635,7 +671,8 @@ void diagLoop(void) {
 // ===================================================================================
 
 void main(void) {
-  uint8_t i, ms = 0;
+  uint8_t i;
+  uint32_t lastFrame = 0, now;
 
   NEO_init();
   CLK_config();
@@ -657,6 +694,7 @@ void main(void) {
   encoderState = readEncoder();
   loadSettings();
 
+  TIMER_init();
   HID_init();
 
   #ifdef DIAG
@@ -671,9 +709,10 @@ void main(void) {
     }
     pollButtons();
     while(CMD_take(cmd)) handleCommand();
-    if(++ms >= 20) {
-      ms = 0;
-      frame++;
+    now = millis();
+    if(now - lastFrame >= 20) {
+      lastFrame = now;
+      effectTime = now - effectStart;
       renderLights();
     }
   }

@@ -13,6 +13,7 @@ working, and adds full control of the three WS2812 RGB LEDs. To install it, see 
 | Light effect | `B1 effect r g b speed brightness flags` | effect: 0 off, 1 on press, 2 wave, 3 solid, 4 breathe, 5 rainbow, 6 layer color; speed 1–10; flags: `01` multicolor, `02` blink the layer number on layer changes. Save with `AA A1`. |
 | Live key color | `B2 key r g b` (`key` 1–3, 0 = all; `B2 FF` clears) | Overrides the effect until cleared; not saved. |
 | Layer color | `B3 L r g b` | Used by the layer effect and the layer blink. Save with `AA A1`. |
+| Sync | `B4` | Restarts the light effect now (firmware 3+). `B1` does too. |
 | Bootloader | `BB 4D 4B` | Reboots into the WCH bootloader for updates. |
 
 `A1 L` also makes layer `L` active right away (the stock firmware only switches when a key of
@@ -28,6 +29,14 @@ MiniKeys tells it apart from the stock firmware.
 Requires SDCC (`brew install sdcc`). `make bin` builds `minikeys.bin`; `make release` copies it to
 `release/minikeys.bin`, which the flasher installs. `make flash` uploads with
 [wchisp](https://github.com/ch32-rs/wchisp) instead, if you have it.
+
+## Timing
+
+Effects run on a 1 ms hardware timer (timer 2) and are computed from the time since the last `B1`
+or `B4`, with integer math that MiniKeys' preview repeats: breathing 6–1.2 s per breath, rainbow
+20–2 s per turn, wave 400–100 ms per key (speed 1–10), gamma 2.6 on the output. MiniKeys sends `B4`
+shortly after any light change and restarts its preview at that moment, so the keypad and the
+screen show the same frame.
 
 ## Pins
 
