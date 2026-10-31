@@ -1,0 +1,6 @@
+build/
+build-diag/
+backup/
+*.hex
+*.bin
+!release/minikeys.bin
