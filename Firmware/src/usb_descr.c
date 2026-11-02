@@ -71,7 +71,7 @@ __code USB_CFG_DESCR_MINIKEYS CfgDescr = {
     .bDescriptorType    = USB_DESCR_TYP_INTERF,
     .bInterfaceNumber   = 1,
     .bAlternateSetting  = 0,
-    .bNumEndpoints      = 1,
+    .bNumEndpoints      = 2,
     .bInterfaceClass    = USB_DEV_CLASS_VEN_SPEC,
     .bInterfaceSubClass = 0,
     .bInterfaceProtocol = 0,
@@ -84,6 +84,14 @@ __code USB_CFG_DESCR_MINIKEYS CfgDescr = {
     .bmAttributes       = USB_ENDP_TYPE_INTER,
     .wMaxPacketSize     = EP2_SIZE,
     .bInterval          = 1
+  },
+  .ep3IN = {
+    .bLength            = sizeof(USB_ENDP_DESCR),
+    .bDescriptorType    = USB_DESCR_TYP_ENDP,
+    .bEndpointAddress   = USB_ENDP_ADDR_EP3_IN,
+    .bmAttributes       = USB_ENDP_TYPE_INTER,
+    .wMaxPacketSize     = EP3_SIZE,
+    .bInterval          = 10
   }
 };
 

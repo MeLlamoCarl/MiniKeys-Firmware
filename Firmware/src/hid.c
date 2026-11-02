@@ -48,14 +48,30 @@ void HID_setup(void) {
   UEP2_DMA    = EP2_ADDR;
   UEP1_CTRL   = bUEP_AUTO_TOG | UEP_T_RES_NAK;
   UEP2_CTRL   = bUEP_AUTO_TOG | UEP_R_RES_ACK;
+  UEP3_DMA    = EP3_ADDR;
+  UEP3_CTRL   = bUEP_AUTO_TOG | UEP_T_RES_NAK;
   UEP4_1_MOD  = bUEP1_TX_EN;
-  UEP2_3_MOD  = bUEP2_RX_EN;
+  UEP2_3_MOD  = bUEP2_RX_EN | bUEP3_TX_EN;
 }
 
 void HID_reset(void) {
   UEP1_CTRL = bUEP_AUTO_TOG | UEP_T_RES_NAK;
   UEP2_CTRL = bUEP_AUTO_TOG | UEP_R_RES_ACK;
+  UEP3_CTRL = bUEP_AUTO_TOG | UEP_T_RES_NAK;
   HID_EP1_writeBusyFlag = 0;
+}
+
+// Events wait on EP3 until MiniKeys reads them; a newer one replaces an unread one.
+void EVT_sendLayer(uint8_t layer) {
+  EP3_buffer[0] = 0x4C;                                     // 'L'
+  EP3_buffer[1] = layer;
+  UEP3_T_LEN = 2;
+  UEP3_CTRL = UEP3_CTRL & ~MASK_UEP_T_RES | UEP_T_RES_ACK;
+}
+
+void EVT_EP3_IN(void) {
+  UEP3_T_LEN = 0;
+  UEP3_CTRL = UEP3_CTRL & ~MASK_UEP_T_RES | UEP_T_RES_NAK;
 }
 
 void HID_EP1_IN(void) {

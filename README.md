@@ -11,7 +11,7 @@ the stock and this firmware, and shows its advanced light settings when this one
 | Keys, combos, sequences, media, mouse, 3 layers | ✓ | ✓ |
 | Light | off, on press, color wave (fixed colors) | off, on press, wave, solid, breathing, rainbow, layer color — any color, speed and brightness |
 | Live key colors from the app | – | ✓ |
-| Layer switch | rewrites the layer's keys | instant |
+| Layer switch | rewrites the layer's keys | instant, also on the keypad: press and turn the knob |
 | Updates | – | over USB, without opening the keypad |
 
 ## Install

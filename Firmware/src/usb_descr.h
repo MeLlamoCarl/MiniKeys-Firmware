@@ -14,14 +14,17 @@
 #define EP0_SIZE        64
 #define EP1_SIZE        16              // HID reports to the host
 #define EP2_SIZE        64              // commands from MiniKeys
+#define EP3_SIZE        8               // events to MiniKeys (layer switched on the keypad)
 
 #define EP0_ADDR        0
 #define EP1_ADDR        (EP0_ADDR + EP0_BUF_SIZE)
 #define EP2_ADDR        (EP1_ADDR + EP1_BUF_SIZE)
+#define EP3_ADDR        (EP2_ADDR + EP2_BUF_SIZE)
 
 #define EP0_BUF_SIZE    EP_BUF_SIZE(EP0_SIZE)
 #define EP1_BUF_SIZE    EP_BUF_SIZE(EP1_SIZE)
 #define EP2_BUF_SIZE    EP_BUF_SIZE(EP2_SIZE)
+#define EP3_BUF_SIZE    EP_BUF_SIZE(EP3_SIZE)
 
 #define EP_BUF_SIZE(x)  (x+2<64 ? x+2 : 64)
 
@@ -35,6 +38,7 @@ typedef struct _USB_CFG_DESCR_MINIKEYS {
   USB_ENDP_DESCR ep1IN;
   USB_ITF_DESCR interface1;
   USB_ENDP_DESCR ep2OUT;
+  USB_ENDP_DESCR ep3IN;
 } USB_CFG_DESCR_MINIKEYS;
 
 extern __code USB_DEV_DESCR DevDescr;

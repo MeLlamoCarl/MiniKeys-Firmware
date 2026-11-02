@@ -61,7 +61,8 @@ void TIMER_init(void) {
 //   media: 16-bit Consumer usage, little endian
 //   mouse: buttons, x, y, wheel, modifiers
 
-#define LAYERS          3
+#define LAYERS          4                   // 3 saved + 1 in RAM for layers MiniKeys loads live
+#define SAVED_LAYERS    3
 #define CONTROLS        6
 #define SLOT_LEN        11
 #define TYPE_NONE       0
@@ -93,6 +94,11 @@ __idata uint8_t editLayer = 0;
 #define FLAG_MULTICOLOR 0x01                // cycle colors instead of using the set color
 #define FLAG_LAYERFLASH 0x02                // blink the layer number on layer changes
 
+// light.reserved: bit 0 = press and turn the knob to switch saved layers. Bit 7 marks the byte as
+// set (older settings: on).
+#define COMBO_SET       0x80
+#define COMBO_DEFAULT   0x01
+
 typedef struct {
   uint8_t effect, r, g, b, speed, brightness, flags, reserved;
 } LightSettings;
@@ -121,7 +127,7 @@ __code uint8_t keyPixel[3] = {0, 1, 2};
 void setDefaults(void) {
   uint8_t i;
   for(i=0; i<LAYERS * CONTROLS; i++) bindings[i][0] = 0;
-  for(i=0; i<LAYERS; i++) {
+  for(i=0; i<SAVED_LAYERS; i++) {
     // Keys 1, 2, 3 and the knob as volume, on every layer.
     __xdata uint8_t* s = bindings[i * CONTROLS];
     s[0] = TYPE_KEYS << 5 | 2; s[1] = 0; s[2] = 0x1E;       // 1
@@ -138,10 +144,11 @@ void setDefaults(void) {
   }
   light.effect = FX_WAVE; light.r = 255; light.g = 255; light.b = 255;
   light.speed = 5; light.brightness = 160; light.flags = FLAG_MULTICOLOR | FLAG_LAYERFLASH;
-  light.reserved = 0;
+  light.reserved = COMBO_SET | COMBO_DEFAULT;
   layerColors[0][0] = 0;   layerColors[0][1] = 120; layerColors[0][2] = 255;  // blue
   layerColors[1][0] = 0;   layerColors[1][1] = 255; layerColors[1][2] = 80;   // green
   layerColors[2][0] = 255; layerColors[2][1] = 60;  layerColors[2][2] = 0;    // orange
+  layerColors[3][0] = 255; layerColors[3][1] = 255; layerColors[3][2] = 255;  // white
 }
 
 void loadSettings(void) {
@@ -149,12 +156,14 @@ void loadSettings(void) {
   setDefaults();
   if(EEPROM_read(0) != FLASH_MAGIC || EEPROM_read(1) != FLASH_VERSION) return;
   for(i=0; i<8; i++) ((__xdata uint8_t*)&light)[i] = EEPROM_read(FLASH_LIGHT + i);
-  for(i=0; i<LAYERS; i++)
+  for(i=0; i<SAVED_LAYERS; i++)
     for(j=0; j<3; j++) layerColors[i][j] = EEPROM_read(FLASH_LAYERS + i * 3 + j);
   if(light.effect >= FX_COUNT) light.effect = FX_WAVE;
   if(!light.speed || light.speed > 10) light.speed = 5;
+  if(!(light.reserved & COMBO_SET)) light.reserved = COMBO_SET | COMBO_DEFAULT;
+  else if(light.reserved & 0x07) light.reserved = COMBO_SET | COMBO_DEFAULT;   // firmware 4 combos
   addr = FLASH_BINDINGS;
-  for(i=0; i<LAYERS * CONTROLS; i++) {
+  for(i=0; i<SAVED_LAYERS * CONTROLS; i++) {
     header = EEPROM_read(addr++);
     len = header & 0x1F;
     if(len >= SLOT_LEN || addr + len > FLASH_SIZE) { bindings[i][0] = 0; continue; }
@@ -166,15 +175,15 @@ void loadSettings(void) {
 // Writes only the bytes that changed, to spare the flash. Returns 0 if the bindings don't fit.
 uint8_t saveSettings(void) {
   uint8_t i, j, addr, len, total = FLASH_BINDINGS;
-  for(i=0; i<LAYERS * CONTROLS; i++) total += 1 + (bindings[i][0] & 0x1F);
+  for(i=0; i<SAVED_LAYERS * CONTROLS; i++) total += 1 + (bindings[i][0] & 0x1F);
   if(total > FLASH_SIZE) return 0;
   EEPROM_update(0, FLASH_MAGIC);
   EEPROM_update(1, FLASH_VERSION);
   for(i=0; i<8; i++) EEPROM_update(FLASH_LIGHT + i, ((__xdata uint8_t*)&light)[i]);
-  for(i=0; i<LAYERS; i++)
+  for(i=0; i<SAVED_LAYERS; i++)
     for(j=0; j<3; j++) EEPROM_update(FLASH_LAYERS + i * 3 + j, layerColors[i][j]);
   addr = FLASH_BINDINGS;
-  for(i=0; i<LAYERS * CONTROLS; i++) {
+  for(i=0; i<SAVED_LAYERS * CONTROLS; i++) {
     len = bindings[i][0] & 0x1F;
     for(j=0; j<=len; j++) EEPROM_update(addr++, bindings[i][j]);
   }
@@ -497,6 +506,10 @@ void handleCommand(void) {
       effectStart = millis();
       return;
 
+    case 0xB5:                                    // B5 on: press and turn switches layers
+      light.reserved = COMBO_SET | (cmd[1] ? 1 : 0);
+      return;
+
     case 0xB4:                                    // B4: restart effects now (sync with the app)
       effectStart = millis();
       return;
@@ -571,6 +584,24 @@ __idata int8_t  encoderSteps = 0;
 // Quadrature transitions: index = previous state << 2 | current state.
 __code int8_t encoderTable[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 
+// Layer switching on the keypad (when on): pressing and turning the knob switches to the next or
+// previous saved layer instead of acting; a knob press without a turn acts when it's let go.
+__idata uint8_t knobDown = 0;
+__idata uint8_t comboUsed = 0;
+
+// Next (+1) or previous (-1) saved layer; from the RAM layer, the first saved one.
+void cycleLayer(int8_t direction) {
+  uint8_t next;
+  if(activeLayer >= SAVED_LAYERS) next = 0;
+  else if(direction > 0) next = activeLayer + 1 >= SAVED_LAYERS ? 0 : activeLayer + 1;
+  else next = activeLayer == 0 ? SAVED_LAYERS - 1 : activeLayer - 1;
+  releaseAll();
+  editLayer = next;
+  activeLayer = next;
+  layerFlashFrames = (next + 1) * 15;         // blink the layer number in its color
+  EVT_sendLayer(next + 1);
+}
+
 uint8_t readEncoder(void) {
   return (PIN_read(PIN_ENC_A) ? 2 : 0) | (PIN_read(PIN_ENC_B) ? 1 : 0);
 }
@@ -582,7 +613,11 @@ void pollEncoder(void) {
   encoderState = state;
   // Report a detent when the encoder rests again (both contacts open).
   if(state == 3) {
-    if(encoderSteps <= -2) { controlDown(CTRL_KNOB_RIGHT); controlUp(CTRL_KNOB_RIGHT); flashPress(2); }
+    if(knobDown && (encoderSteps <= -2 || encoderSteps >= 2)) {   // press and turn: switch layers
+      cycleLayer(encoderSteps <= -2 ? 1 : -1);
+      comboUsed = 1;
+    }
+    else if(encoderSteps <= -2) { controlDown(CTRL_KNOB_RIGHT); controlUp(CTRL_KNOB_RIGHT); flashPress(2); }
     else if(encoderSteps >= 2) { controlDown(CTRL_KNOB_LEFT); controlUp(CTRL_KNOB_LEFT); flashPress(2); }
     encoderSteps = 0;
   }
@@ -598,22 +633,33 @@ uint8_t readButton(uint8_t i) {
 }
 
 void pollButtons(void) {
-  uint8_t i, pressed, ctrl;
+  uint8_t i, pressed, switching = light.reserved & 0x01;
   for(i=0; i<4; i++) {
     pressed = readButton(i);
     if(pressed == buttonStable[i]) { buttonCount[i] = 0; continue; }
     if(++buttonCount[i] < DEBOUNCE_MS) continue;
     buttonStable[i] = pressed;
     buttonCount[i] = 0;
-    ctrl = i < 3 ? i : CTRL_KNOB_PRESS;
-    if(pressed) {
-      flashPress(i < 3 ? i : 2);
-      controlDown(ctrl);
+
+    if(i == 3 && switching) {                 // knob switch: act on release unless turned
+      if(pressed) {
+        knobDown = 1;
+        comboUsed = 0;
+      } else {
+        knobDown = 0;
+        if(!comboUsed) {
+          flashPress(2);
+          controlDown(CTRL_KNOB_PRESS);
+          controlUp(CTRL_KNOB_PRESS);
+        }
+      }
+      continue;
     }
-    else controlUp(ctrl);
+
+    if(pressed) { flashPress(i < 3 ? i : 2); controlDown(i < 3 ? i : CTRL_KNOB_PRESS); }
+    else controlUp(i < 3 ? i : CTRL_KNOB_PRESS);
   }
 }
-
 
 // ===================================================================================
 // Pin finder (make DIAG=1): types the name of every free pin that gets pulled low

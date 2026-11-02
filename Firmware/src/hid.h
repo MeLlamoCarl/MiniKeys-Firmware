@@ -13,3 +13,6 @@ void HID_sendReport(__xdata uint8_t* buf, uint8_t len);
 
 // Copies the oldest queued command to `cmd` and returns 1, or returns 0 if none is waiting.
 uint8_t CMD_take(__xdata uint8_t* cmd);
+
+// Tells MiniKeys that the keypad switched to `layer` (1...3) by itself.
+void EVT_sendLayer(uint8_t layer);

@@ -14,10 +14,15 @@ working, and adds full control of the three WS2812 RGB LEDs. To install it, see 
 | Live key color | `B2 key r g b` (`key` 1–3, 0 = all; `B2 FF` clears) | Overrides the effect until cleared; not saved. |
 | Layer color | `B3 L r g b` | Used by the layer effect and the layer blink. Save with `AA A1`. |
 | Sync | `B4` | Restarts the light effect now (firmware 3+). `B1` does too. |
+| Layer switching | `B5 on` (`1` on, `0` off) | Press and turn the knob to switch between the 3 saved layers (firmware 5+). While it's on, a knob press acts when the knob is released, if it wasn't turned. Save with `AA A1`. |
 | Bootloader | `BB 4D 4B` | Reboots into the WCH bootloader for updates. |
 
 `A1 L` also makes layer `L` active right away (the stock firmware only switches when a key of
-that layer is written). Bindings, light settings and layer colors live in the 128-byte data flash;
+that layer is written). Layers 1–3 are saved; layer 4 lives in RAM only, so MiniKeys can run
+layers beyond the first 3 without writing the flash.
+
+When the layer changes on the keypad, the firmware sends `4C L` on interface 1's interrupt IN
+endpoint (EP3), so the app can follow (firmware 5+). Bindings, light settings and layer colors live in the 128-byte data flash;
 bindings take 1 byte plus their payload each, so very long sequences on every key may not fit
 (the keypad blinks red and keeps the last saved state).
 
