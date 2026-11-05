@@ -4,7 +4,7 @@ Custom firmware for the CH552G 3-key + knob USB keypad (USB `1189:8890`, sold as
 and the tool that installs it. [MiniKeys](https://github.com/MeLlamoCarl/MiniKeys) works with both
 the stock and this firmware, and shows its advanced light settings when this one is installed.
 
-<p align="center"><img src="docs/images/keypad-rainbow.jpg" width="420" alt="The keypad with the rainbow effect"></p>
+<p align="center"><img src="docs/images/keypad-top.jpg" width="400" alt="The keypad from above, with the rainbow effect"> <img src="docs/images/keypad-side.jpg" width="400" alt="The keypad from the side, lit"></p>
 
 | | Stock firmware | MiniKeys firmware |
 |---|---|---|
