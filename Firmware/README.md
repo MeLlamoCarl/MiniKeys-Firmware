@@ -22,7 +22,7 @@ that layer is written). Layers 1–3 are saved; layer 4 lives in RAM only, so Mi
 layers beyond the first 3 without writing the flash.
 
 When the layer changes on the keypad, the firmware sends `4C L` on interface 1's interrupt IN
-endpoint (EP3), so the app can follow (firmware 5+). Bindings, light settings and layer colors live in the 128-byte data flash;
+endpoint (EP3), so the app can follow (firmware 4+). Bindings, light settings and layer colors live in the 128-byte data flash;
 bindings take 1 byte plus their payload each, so very long sequences on every key may not fit
 (the keypad blinks red and keeps the last saved state).
 
