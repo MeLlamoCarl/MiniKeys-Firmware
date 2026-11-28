@@ -4,3 +4,4 @@ backup/
 *.hex
 *.bin
 !release/minikeys.bin
+build-6key/

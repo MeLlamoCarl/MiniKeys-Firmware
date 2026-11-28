@@ -1,5 +1,5 @@
 // ===================================================================================
-// MiniKeys firmware for the CH552G 3-key + knob keypad (USB 1189:8890)
+// MiniKeys firmware for the CH552G 3- or 6-key + knob keypad (USB 1189:8890), see KEYS in config.h
 // ===================================================================================
 //
 // Replaces the stock firmware while speaking the same programming protocol (see
@@ -55,7 +55,7 @@ void TIMER_init(void) {
 // ===================================================================================
 // Bindings
 // ===================================================================================
-// Controls: 0-2 = keys 1-3, 3 = knob left, 4 = knob press, 5 = knob right.
+// Controls: 0..KEYS-1 = keys, then knob left, knob press, knob right.
 // Each slot: [type << 5 | payload length] + payload.
 //   keys:  pairs of (modifiers, HID usage), up to 5 (length 0 = key disabled)
 //   media: 16-bit Consumer usage, little endian
@@ -63,16 +63,17 @@ void TIMER_init(void) {
 
 #define LAYERS          4                   // 3 saved + 1 in RAM for layers MiniKeys loads live
 #define SAVED_LAYERS    3
-#define CONTROLS        6
+#define CONTROLS        (KEYS + 3)
 #define SLOT_LEN        11
 #define TYPE_NONE       0
 #define TYPE_KEYS       1
 #define TYPE_MEDIA      2
 #define TYPE_MOUSE      3
 
-#define CTRL_KNOB_LEFT  3
-#define CTRL_KNOB_PRESS 4
-#define CTRL_KNOB_RIGHT 5
+#define CTRL_KNOB_LEFT  KEYS
+#define CTRL_KNOB_PRESS (KEYS + 1)
+#define CTRL_KNOB_RIGHT (KEYS + 2)
+#define KNOB_PIXEL      2                   // the knob's turns and presses flash this key's LED
 
 __xdata uint8_t bindings[LAYERS * CONTROLS][SLOT_LEN];
 __idata uint8_t activeLayer = 0;
@@ -84,7 +85,7 @@ __idata uint8_t editLayer = 0;
 
 #define FX_OFF          0
 #define FX_PRESS        1                   // pressed key lights up
-#define FX_WAVE         2                   // light runs over keys 1 -> 2 -> 3
+#define FX_WAVE         2                   // light runs over keys 1 -> 2 -> ... -> KEYS
 #define FX_SOLID        3
 #define FX_BREATHE      4
 #define FX_RAINBOW      5
@@ -109,7 +110,11 @@ __xdata uint8_t overrideColors[NEO_COUNT][3];
 __idata uint8_t overrideMask = 0;            // bit i: pixel i shows overrideColors[i]
 
 // LED index for each key, in case the pixel chain runs in another order.
-__code uint8_t keyPixel[3] = {0, 1, 2};
+#if KEYS == 6
+__code uint8_t keyPixel[KEYS] = {0, 1, 2, 3, 4, 5};
+#else
+__code uint8_t keyPixel[KEYS] = {0, 1, 2};
+#endif
 
 // ===================================================================================
 // Data flash layout (128 bytes)
@@ -118,23 +123,22 @@ __code uint8_t keyPixel[3] = {0, 1, 2};
 // 19-127: bindings, packed (header byte + payload per slot).
 
 #define FLASH_MAGIC     0x4D
-#define FLASH_VERSION   1
+#define FLASH_VERSION   (KEYS == 3 ? 1 : 2)
 #define FLASH_LIGHT     2
 #define FLASH_LAYERS    10
 #define FLASH_BINDINGS  19
 #define FLASH_SIZE      128
 
 void setDefaults(void) {
-  uint8_t i;
+  uint8_t i, j;
   for(i=0; i<LAYERS * CONTROLS; i++) bindings[i][0] = 0;
   for(i=0; i<SAVED_LAYERS; i++) {
-    // Keys 1, 2, 3 and the knob as volume, on every layer.
-    __xdata uint8_t* s = bindings[i * CONTROLS];
-    s[0] = TYPE_KEYS << 5 | 2; s[1] = 0; s[2] = 0x1E;       // 1
-    s = bindings[i * CONTROLS + 1];
-    s[0] = TYPE_KEYS << 5 | 2; s[1] = 0; s[2] = 0x1F;       // 2
-    s = bindings[i * CONTROLS + 2];
-    s[0] = TYPE_KEYS << 5 | 2; s[1] = 0; s[2] = 0x20;       // 3
+    // Keys type 1, 2, 3, ... and the knob is volume, on every layer.
+    __xdata uint8_t* s;
+    for(j=0; j<KEYS; j++) {
+      s = bindings[i * CONTROLS + j];
+      s[0] = TYPE_KEYS << 5 | 2; s[1] = 0; s[2] = 0x1E + j;
+    }
     s = bindings[i * CONTROLS + CTRL_KNOB_LEFT];
     s[0] = TYPE_MEDIA << 5 | 2; s[1] = 0xEA; s[2] = 0;      // volume down
     s = bindings[i * CONTROLS + CTRL_KNOB_PRESS];
@@ -393,14 +397,14 @@ void renderLights(void) {
 
     case FX_RAINBOW:
       phase = periodPhase(rainbowPeriod[light.speed - 1]);
-      for(i=0; i<NEO_COUNT; i++) setPixelHue(i, phase + i * 64);
+      for(i=0; i<NEO_COUNT; i++) setPixelHue(i, phase + i * (KEYS == 3 ? 64 : 256 / KEYS));
       break;
 
     case FX_WAVE:
       position = effectTime / waveStep[light.speed - 1];
-      cycle = (position / 6) % 3;           // 3 keys lit, then 3 steps dark, next color
-      phase = position % 6;
-      if(phase < 3) {
+      cycle = (position / (2 * KEYS)) % 3;  // each key lit in turn, then as many steps dark, next color
+      phase = position % (2 * KEYS);
+      if(phase < KEYS) {
         if(light.flags & FLAG_MULTICOLOR) {
           for(i=0; i<3; i++) tmpColor[i] = palette[cycle][i];
         }
@@ -474,8 +478,8 @@ void enterBootloader(void) {
 __xdata uint8_t cmd[CMD_LEN];
 
 uint8_t controlIndex(uint8_t key) {
-  if(key >= 1 && key <= 3) return key - 1;
-  if(key >= 13 && key <= 15) return key - 10;     // 13, 14, 15 -> 3, 4, 5
+  if(key >= 1 && key <= KEYS) return key - 1;
+  if(key >= 13 && key <= 15) return key - 13 + KEYS;   // 13, 14, 15 -> knob left, press, right
   return 0xFF;
 }
 
@@ -576,8 +580,9 @@ void handleCommand(void) {
 
 #define DEBOUNCE_MS 5
 
-__xdata uint8_t buttonStable[4];             // 1 = pressed: key 1, key 2, key 3, knob
-__xdata uint8_t buttonCount[4];
+#define BUTTONS (KEYS + 1)
+__xdata uint8_t buttonStable[BUTTONS];       // 1 = pressed: keys 1..KEYS, then the knob
+__xdata uint8_t buttonCount[BUTTONS];
 __idata uint8_t encoderState;
 __idata int8_t  encoderSteps = 0;
 
@@ -617,8 +622,8 @@ void pollEncoder(void) {
       cycleLayer(encoderSteps <= -2 ? 1 : -1);
       comboUsed = 1;
     }
-    else if(encoderSteps <= -2) { controlDown(CTRL_KNOB_RIGHT); controlUp(CTRL_KNOB_RIGHT); flashPress(2); }
-    else if(encoderSteps >= 2) { controlDown(CTRL_KNOB_LEFT); controlUp(CTRL_KNOB_LEFT); flashPress(2); }
+    else if(encoderSteps <= -2) { controlDown(CTRL_KNOB_RIGHT); controlUp(CTRL_KNOB_RIGHT); flashPress(KNOB_PIXEL); }
+    else if(encoderSteps >= 2) { controlDown(CTRL_KNOB_LEFT); controlUp(CTRL_KNOB_LEFT); flashPress(KNOB_PIXEL); }
     encoderSteps = 0;
   }
 }
@@ -628,27 +633,32 @@ uint8_t readButton(uint8_t i) {
     case 0:  return !PIN_read(PIN_KEY1);
     case 1:  return !PIN_read(PIN_KEY2);
     case 2:  return !PIN_read(PIN_KEY3);
+#if KEYS == 6
+    case 3:  return !PIN_read(PIN_KEY4);
+    case 4:  return !PIN_read(PIN_KEY5);
+    case 5:  return !PIN_read(PIN_KEY6);
+#endif
     default: return !PIN_read(PIN_ENC_SW);
   }
 }
 
 void pollButtons(void) {
   uint8_t i, pressed, switching = light.reserved & 0x01;
-  for(i=0; i<4; i++) {
+  for(i=0; i<BUTTONS; i++) {
     pressed = readButton(i);
     if(pressed == buttonStable[i]) { buttonCount[i] = 0; continue; }
     if(++buttonCount[i] < DEBOUNCE_MS) continue;
     buttonStable[i] = pressed;
     buttonCount[i] = 0;
 
-    if(i == 3 && switching) {                 // knob switch: act on release unless turned
+    if(i == KEYS && switching) {                 // knob switch: act on release unless turned
       if(pressed) {
         knobDown = 1;
         comboUsed = 0;
       } else {
         knobDown = 0;
         if(!comboUsed) {
-          flashPress(2);
+          flashPress(KNOB_PIXEL);
           controlDown(CTRL_KNOB_PRESS);
           controlUp(CTRL_KNOB_PRESS);
         }
@@ -656,8 +666,8 @@ void pollButtons(void) {
       continue;
     }
 
-    if(pressed) { flashPress(i < 3 ? i : 2); controlDown(i < 3 ? i : CTRL_KNOB_PRESS); }
-    else controlUp(i < 3 ? i : CTRL_KNOB_PRESS);
+    if(pressed) { flashPress(i < KEYS ? i : KNOB_PIXEL); controlDown(i < KEYS ? i : CTRL_KNOB_PRESS); }
+    else controlUp(i < KEYS ? i : CTRL_KNOB_PRESS);
   }
 }
 
@@ -727,6 +737,11 @@ void main(void) {
   PIN_input_PU(PIN_KEY1);
   PIN_input_PU(PIN_KEY2);
   PIN_input_PU(PIN_KEY3);
+#if KEYS == 6
+  PIN_input_PU(PIN_KEY4);
+  PIN_input_PU(PIN_KEY5);
+  PIN_input_PU(PIN_KEY6);
+#endif
   PIN_input_PU(PIN_ENC_A);
   PIN_input_PU(PIN_ENC_B);
   PIN_input_PU(PIN_ENC_SW);
@@ -736,7 +751,7 @@ void main(void) {
 
   for(i=0; i<CONTROLS; i++) { heldMods[i] = 0; heldKeys[i] = 0; heldButtons[i] = 0; }
   for(i=0; i<NEO_COUNT; i++) pressLevel[i] = 0;
-  for(i=0; i<4; i++) { buttonStable[i] = 0; buttonCount[i] = 0; }
+  for(i=0; i<BUTTONS; i++) { buttonStable[i] = 0; buttonCount[i] = 0; }
   encoderState = readEncoder();
   loadSettings();
 
