@@ -6,6 +6,15 @@ programming protocol as the stock firmware (see MiniKeys'
 working, and adds full control of the three WS2812 RGB LEDs. To install it, see the
 [main README](../README.md).
 
+### 6-key (2x3) board
+
+The 6-key + knob variant with the same USB ID and a CH552G is supported with `make KEYS=6 bin`
+(output: `minikeys-6key.bin`). Its top row and knob use the same pins as the 3-key board; the
+bottom row is P1.5, P1.4, P3.2 (left to right), and its six WS2812 LEDs on P3.4 follow the key
+order. Keys are numbered 1-3 on the top row and 4-6 on the bottom row, both in the binding
+protocol (key ids 1-6, knob 13-15) and in `B2 key r g b`. The prebuilt image and the flasher stay
+3-key; flash the 6-key image with `wchisp flash minikeys-6key.bin` or the flasher's `flash FILE`.
+
 ## What it adds
 
 | Command | Bytes | Effect |

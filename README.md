@@ -72,6 +72,7 @@ Requires SDCC (`brew install sdcc`).
 make -C Firmware bin        # build Firmware/minikeys.bin
 make -C Firmware release    # update the prebuilt image the flasher uses
 make -C Firmware DIAG=1 bin # pin finder: each pin pulled low types its name
+make -C Firmware KEYS=6 bin # 6-key (2x3) board: Firmware/minikeys-6key.bin
 ```
 
 The commands the firmware understands are in [Firmware/README.md](Firmware/README.md).
