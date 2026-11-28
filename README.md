@@ -41,13 +41,20 @@ Before writing, it saves the keypad's settings (its 128-byte data flash) to `bac
    ![The keypad without its bottom plate, with the CH552G chip marked](docs/images/board-chip.jpg)
 
 2. With a **10 kΩ resistor** (or fine tweezers), connect **pin 12 (D+)** to **pin 11 (3.3 V)**.
-   Pin 1 is next to the dimple on the chip. **Don't touch pin 10 (5 V)**: bridging it to pin 11
-   can damage the chip.
+   Pin 1 is next to the dimple on the chip. Pins 1-8 run down that side and 9-16 come back up the
+   other, so pin 12 is opposite pin 5 and pin 11 is opposite pin 6. On some boards the D+ trace runs
+   under the chip, so pin 12 can look unconnected. **Don't touch pin 10 (5 V)**: bridging it to pin
+   11 can damage the chip.
 
    ![Pins 12 and 11 of the CH552G](docs/images/bootloader-pins.jpg)
 
-3. Keep the contact and plug the keypad in; let go after a second. In bootloader mode the LEDs stay
-   off. If they light up as usual, unplug and try again.
+3. Start the tool first, then keep the contact and plug the keypad in; let go after a second. In
+   bootloader mode the LEDs stay off. If they light up as usual, unplug and try again.
+
+   The bootloader gives up after about 10 seconds if nothing talks to it and starts the installed
+   firmware, so the LEDs light up then too. That looks just like a failed attempt, so have the tool
+   (or `wchisp`) waiting before you plug in. On Linux, `dmesg` shows `idVendor=4348,
+   idProduct=55e0` when the bootloader did start.
 
 Chips with an older bootloader (before 2.4) use **pin 3 (P1.5)** to **pin 9 (GND)** instead:
 
